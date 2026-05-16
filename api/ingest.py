@@ -3,7 +3,15 @@ import uuid
 from pathlib import Path
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 import config
 import embedder
@@ -61,6 +69,18 @@ def ingest_text(doc_id: str, text: str) -> int:
     ]
     client.upsert(collection_name=config.QDRANT_COLLECTION, points=points)
     return len(points)
+
+
+def delete_doc(doc_id: str) -> None:
+    client = get_client()
+    client.delete(
+        collection_name=config.QDRANT_COLLECTION,
+        points_selector=FilterSelector(
+            filter=Filter(
+                must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+            )
+        ),
+    )
 
 
 def ingest_file(filename: str) -> int:

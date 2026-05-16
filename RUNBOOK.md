@@ -1,12 +1,12 @@
-# HersonBot RAG Operational Runbook
+# HersonBot RAG Sandbox — Operational Runbook
 
 Environment: `grid-node-01`<br>
 Operator: `claudeops`<br>
-Phase: `2A`<br>
-Last updated: 2026-05-15
+Phase: `2B`<br>
+Last updated: 2026-05-16
 
-This runbook is the operator source of truth for running the HersonBot local RAG
-sandbox on the Grid homelab host.
+This runbook is the operator source of truth for running the HersonBot RAG Sandbox
+on the Grid homelab host.
 
 ## Architecture
 
@@ -71,7 +71,7 @@ All ports must remain bound to `127.0.0.1`.
 
 | Service | Host port | Container port | Protocol |
 | --- | --- | --- | --- |
-| HersonBot API | `127.0.0.1:8100` | `8100` | HTTP |
+| HersonBot RAG Sandbox API | `127.0.0.1:8100` | `8100` | HTTP |
 | Qdrant REST | `127.0.0.1:6333` | `6333` | HTTP |
 | Qdrant gRPC | `127.0.0.1:6334` | `6334` | gRPC |
 
@@ -152,13 +152,48 @@ for f in /opt/grid/repos/hersonbot/docs/*.txt; do
 done
 ```
 
+### Delete All Chunks For A Document
+
+```bash
+curl -s -X DELETE http://127.0.0.1:8100/ingest/{doc_id}
+```
+
+Example:
+
+```bash
+curl -s -X DELETE http://127.0.0.1:8100/ingest/my-note
+# → {"status":"deleted","doc_id":"my-note"}
+```
+
+The endpoint deletes every Qdrant point whose `doc_id` payload field matches the
+given value. Deleting a non-existent `doc_id` is safe and returns the same
+response.
+
+### Delete-Before-Reingest Workflow
+
+Use this when updating a document that may have shrunk (fewer chunks than before).
+Without deleting first, orphaned chunks from the old version remain in Qdrant.
+
+```bash
+# 1. Remove old chunks
+curl -s -X DELETE http://127.0.0.1:8100/ingest/my-document
+
+# 2. Re-ingest the updated file
+curl -s -X POST http://127.0.0.1:8100/ingest/file \
+  -H "Content-Type: application/json" \
+  -d '{"path": "my-document.txt"}'
+```
+
+This is also the recommended pattern for fully removing a document from the
+knowledge base.
+
 ## Query Commands
 
 ```bash
 # Basic query
 curl -s -X POST http://127.0.0.1:8100/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "what is HersonBot", "top_k": 3}' \
+  -d '{"query": "what is HersonBot RAG Sandbox", "top_k": 3}' \
   | python3 -m json.tool
 
 # Query with a larger result set
@@ -217,7 +252,7 @@ Run the smoke test after startup, restore, or API rebuild:
 
 The smoke test checks container status, homelab safety assumptions, health
 endpoints, collection availability, text ingest, retrieval, localhost-only port
-bindings, and deduplication behavior.
+bindings, deduplication behavior, and delete-by-doc_id correctness.
 
 ## Backup And Restore
 
@@ -304,8 +339,8 @@ This system intentionally cannot:
 | Limitation | Impact | Future resolution |
 | --- | --- | --- |
 | Plain text only for `/ingest/file` | PDFs, Markdown, and HTML cannot be ingested directly | Add document loaders |
-| Orphaned chunks on document shrink | Old higher-index chunks can remain after re-ingesting shorter content | Delete by `doc_id` before re-ingest |
-| Pre-2A duplicate data | Older random-UUID chunks may still exist | One-time reset and re-ingest |
+| ~~Orphaned chunks on document shrink~~ | **Resolved in Phase 2B.** Use `DELETE /ingest/{doc_id}` before re-ingesting updated documents. | — |
+| Pre-2A duplicate data | Older random-UUID chunks may still exist if the collection was not reset after Phase 2A | One-time `docker compose down -v` and re-ingest |
 | No LLM generation | `/query` returns chunks, not synthesized answers | Add Ollama or OpenAI-compatible generation |
 | No authentication | Any local process can call the API | Add token auth when access broadens |
 | Fixed chunk size | Prose works better than code or tables | Add per-document chunking strategy |

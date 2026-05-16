@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="HersonBot RAG API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="HersonBot RAG Sandbox API", version="0.1.0", lifespan=lifespan)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -67,6 +67,16 @@ def ingest_file(req: IngestFileRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.exception("ingest/file failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/ingest/{doc_id}")
+def delete_doc(doc_id: str):
+    try:
+        ingest_lib.delete_doc(doc_id)
+        return {"status": "deleted", "doc_id": doc_id}
+    except Exception as e:
+        logger.exception("delete failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

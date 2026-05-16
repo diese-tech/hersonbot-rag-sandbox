@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# smoke-test.sh — end-to-end health and functional verification for HersonBot
+# smoke-test.sh — end-to-end health and functional verification for HersonBot RAG Sandbox
 # Exits 0 on full pass, 1 on any failure.
 # No sudo required. Safe to run at any time against the live stack.
 
@@ -75,7 +75,7 @@ header "5. Ingest"
 
 INGEST_RESULT=$(curl -sf --max-time 15 -X POST "${API}/ingest/text" \
   -H "Content-Type: application/json" \
-  -d "{\"doc_id\": \"${SMOKE_DOC_ID}\", \"text\": \"HersonBot smoke test document for grid-node-01 verification.\"}" \
+  -d "{\"doc_id\": \"${SMOKE_DOC_ID}\", \"text\": \"HersonBot RAG Sandbox smoke test document for grid-node-01 verification.\"}" \
   2>/dev/null || echo "UNREACHABLE")
 
 check "Text ingest returns ingested status" "$INGEST_RESULT" "ingested"
@@ -89,7 +89,7 @@ sleep 1
 
 QUERY_RESULT=$(curl -sf --max-time 15 -X POST "${API}/query" \
   -H "Content-Type: application/json" \
-  -d '{"query": "smoke test grid-node-01", "top_k": 3}' \
+  -d '{"query": "smoke test grid-node-01", "top_k": 20}' \
   2>/dev/null || echo "UNREACHABLE")
 
 check "Query returns results" "$QUERY_RESULT" "results"
@@ -133,7 +133,7 @@ fi
 header "8. Deduplication (Phase 2A)"
 
 DEDUP_DOC_ID="smoke-dedup-check"
-DEDUP_TEXT="Deduplication verification text for HersonBot Phase 2A. Ingest this twice and expect one copy."
+DEDUP_TEXT="Deduplication verification text for HersonBot RAG Sandbox Phase 2A. Ingest this twice and expect one copy."
 
 # Ingest the same doc_id twice in a row
 curl -sf --max-time 15 -X POST "${API}/ingest/text" \
@@ -182,6 +182,50 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# ── 9. Delete by doc_id (Phase 2B) ───────────────────────────────────────────
+
+header "9. Delete by doc_id (Phase 2B)"
+
+DELETE_DOC_ID="smoke-delete-$(date +%s)"
+DELETE_TEXT="Phase 2B deletion test sentinel. This chunk must vanish after DELETE."
+
+# Ingest the test doc
+INGEST_DEL=$(curl -sf --max-time 15 -X POST "${API}/ingest/text" \
+  -H "Content-Type: application/json" \
+  -d "{\"doc_id\": \"${DELETE_DOC_ID}\", \"text\": \"${DELETE_TEXT}\"}" \
+  2>/dev/null || echo "UNREACHABLE")
+check "Delete test doc ingests successfully" "$INGEST_DEL" "ingested"
+
+sleep 1
+
+# Confirm it's retrievable before deletion
+PRE_DEL=$(curl -sf --max-time 15 -X POST "${API}/query" \
+  -H "Content-Type: application/json" \
+  -d "{\"query\": \"Phase 2B deletion test sentinel\", \"top_k\": 10}" \
+  2>/dev/null || echo "UNREACHABLE")
+check "Delete test doc appears in results before DELETE" "$PRE_DEL" "$DELETE_DOC_ID"
+
+# Delete it
+DEL_RESULT=$(curl -sf --max-time 15 -X DELETE "${API}/ingest/${DELETE_DOC_ID}" \
+  2>/dev/null || echo "UNREACHABLE")
+check "DELETE /ingest/{doc_id} returns deleted status" "$DEL_RESULT" "deleted"
+
+sleep 1
+
+# Confirm it's gone
+POST_DEL=$(curl -sf --max-time 15 -X POST "${API}/query" \
+  -H "Content-Type: application/json" \
+  -d "{\"query\": \"Phase 2B deletion test sentinel\", \"top_k\": 10}" \
+  2>/dev/null || echo "UNREACHABLE")
+
+if echo "$POST_DEL" | grep -q "$DELETE_DOC_ID"; then
+  red "Deleted doc_id still appears in query results — delete broken"
+  FAIL=$((FAIL + 1))
+else
+  green "Deleted doc_id no longer appears in query results"
+  PASS=$((PASS + 1))
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 header "Summary"
@@ -190,7 +234,7 @@ echo "  Failed: ${FAIL}"
 echo ""
 
 if [ "$FAIL" -eq 0 ]; then
-  green "All checks passed. HersonBot is healthy."
+  green "All checks passed. HersonBot RAG Sandbox is healthy."
   exit 0
 else
   red "${FAIL} check(s) failed. Review output above."

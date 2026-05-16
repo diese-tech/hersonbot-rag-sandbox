@@ -1,30 +1,45 @@
-HersonBot is a homelab AI assistant built to run entirely on local infrastructure.
+HersonBot RAG Sandbox is a local-first Retrieval-Augmented Generation system built
+to run entirely on homelab infrastructure.
 
-It is designed to be modular and expandable, starting as a local RAG (Retrieval-Augmented Generation) system and growing into a full AI backbone for the Grid homelab ecosystem.
+It is designed to be modular and expandable, starting as a local RAG system and
+growing into a full AI backbone for the Grid homelab ecosystem.
 
 ## Architecture
 
-HersonBot runs on grid-node-01, a Linux server managed by the claudeops operator account. All services are containerized with Docker and Docker Compose. The system uses a vector database (Qdrant) to store embedded document chunks and a FastAPI service to handle ingestion and retrieval.
+HersonBot RAG Sandbox runs on grid-node-01, a Linux server managed by the
+claudeops operator account. All services are containerized with Docker and Docker
+Compose. The system uses a vector database (Qdrant) to store embedded document
+chunks and a FastAPI service to handle ingestion and retrieval.
 
 ## Components
 
-- Qdrant: A high-performance vector database used to store and search document embeddings. It runs locally and binds only to localhost.
-- HersonBot API: A FastAPI service that exposes endpoints for document ingestion and semantic search. It uses sentence-transformers to generate embeddings locally without any external API calls.
-- sentence-transformers: A Python library that runs the all-MiniLM-L6-v2 model to convert text into 384-dimensional vector embeddings.
+- Qdrant: A high-performance vector database used to store and search document
+  embeddings. It runs locally and binds only to localhost.
+- HersonBot RAG Sandbox API: A FastAPI service that exposes endpoints for document
+  ingestion and semantic search. It uses sentence-transformers to generate
+  embeddings locally without any external API calls.
+- sentence-transformers: A Python library that runs the all-MiniLM-L6-v2 model to
+  convert text into 384-dimensional vector embeddings.
 
 ## Planned Integrations
 
-HersonBot is designed to expand into:
+HersonBot RAG Sandbox is designed to expand into:
 - A Discord bot that answers questions using the RAG knowledge base
 - A web dashboard for browsing ingested documents and query logs
 - Agent memory for persistent AI context across sessions
 - Multi-model orchestration supporting both local LLMs (via Ollama) and cloud APIs
-- Deep integration with the broader Grid homelab ecosystem including Home Assistant automation
+- Deep integration with the broader Grid homelab ecosystem including Home Assistant
+  automation
 
 ## Operating Boundaries
 
-HersonBot strictly avoids interfering with existing homelab services. It does not modify Home Assistant, Uptime Kuma, Portainer, the Docker daemon, SSH configuration, or firewall settings. All new services bind only to 127.0.0.1 and are accessible only from the local machine.
+HersonBot RAG Sandbox strictly avoids interfering with existing homelab services.
+It does not modify Home Assistant, Uptime Kuma, Portainer, the Docker daemon, SSH
+configuration, or firewall settings. All services bind only to 127.0.0.1 and are
+accessible only from the local machine.
 
 ## Grid Infrastructure
 
-The Grid is a homelab ecosystem designed for resilience, observability, and local-first AI. HersonBot is its first AI-native component, laying the foundation for future intelligent automation within the home network.
+The Grid is a homelab ecosystem designed for resilience, observability, and
+local-first AI. HersonBot RAG Sandbox is its first AI-native component, laying the
+foundation for future intelligent automation within the home network.
