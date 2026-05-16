@@ -31,6 +31,29 @@ operator / scripts
 The API reads source documents from the repo `docs/` directory mounted read-only
 inside the container as `/docs`.
 
+### Planned: Windows Ollama integration
+
+LLM generation for `/answer` is designed to run on a separate Windows PC rather
+than on grid-node-01. The hardware split is intentional:
+
+| Host | Role | Hardware |
+| --- | --- | --- |
+| `grid-node-01` | RAG orchestration, embeddings, retrieval | Intel i5-6th gen, 8 GB RAM, no GPU |
+| `Dustins-PC` | Ollama LLM inference server | Intel i9-12900K, RTX 5070 |
+
+**Confirmed network topology (verified 2026-05-16):**
+
+- `Dustins-PC` LAN IP: `192.168.0.100`
+- `Dustins-PC` Tailscale IP: `100.90.14.127`
+- Tailscale peer path: direct (not relayed), 1 ms RTT
+- grid-node-01 Tailscale IP: `100.67.140.117`
+
+**Recommended connection path:** Tailscale (`100.90.14.127:11434`).
+LAN IP is DHCP and may change; Tailscale IP is stable.
+
+**Current status:** Port 11434 unreachable — Ollama is not yet configured to
+accept external connections. See "Enabling Windows Ollama" below.
+
 ## Component Responsibilities
 
 | Component | Image / Source | Role |
@@ -38,6 +61,7 @@ inside the container as `/docs`.
 | `hersonbot-api` | Built from `repos/hersonbot/api/` | Ingestion, chunking, embedding, retrieval |
 | `hersonbot-qdrant` | `qdrant/qdrant:v1.14.1` | Persistent vector storage |
 | `sentence-transformers` | `all-MiniLM-L6-v2` | Local 384-dimension embeddings |
+| `Ollama` (remote) | Windows PC — not on grid-node-01 | LLM inference for `/answer` |
 
 ## Data Flow
 
@@ -299,35 +323,116 @@ knowledge base.
 produce a grounded answer. The endpoint is disabled (returns 503) when `OLLAMA_HOST`
 is not set in the stack `.env`.
 
-### Enable Ollama
+**Architecture note:** Ollama runs on `Dustins-PC` (RTX 5070), not on
+grid-node-01. The API container reaches it over Tailscale. Do not install Ollama
+on grid-node-01.
 
-1. Ensure Ollama is running on the Docker host with the desired model pulled:
+### Enabling Windows Ollama
 
-   ```bash
-   ollama pull llama3
+Ollama on Windows defaults to binding only on `127.0.0.1:11434`, which makes it
+unreachable from other machines even over Tailscale. Two changes are required on
+the Windows side.
+
+#### Step 1 — Configure Ollama to accept external connections (Windows)
+
+Set the environment variable for the Ollama process. Choose one method:
+
+**Option A — System-wide via Windows environment variables (recommended, survives restarts):**
+
+1. Open **System Properties → Advanced → Environment Variables**
+2. Under **System variables**, click **New**:
+   - Variable name: `OLLAMA_HOST`
+   - Variable value: `0.0.0.0:11434`
+3. Click OK
+4. **Restart the Ollama service** (Task Manager → Services → find Ollama → Restart,
+   or restart the Ollama app from system tray)
+
+**Option B — Per-session in PowerShell (for testing only):**
+
+```powershell
+$env:OLLAMA_HOST = "0.0.0.0:11434"
+ollama serve
+```
+
+#### Step 2 — Allow TCP 11434 in Windows Defender Firewall (Windows)
+
+Run in an **elevated PowerShell** (Run as Administrator):
+
+```powershell
+New-NetFirewallRule `
+  -DisplayName "Ollama API (Tailscale)" `
+  -Direction Inbound `
+  -Protocol TCP `
+  -LocalPort 11434 `
+  -Action Allow `
+  -Profile Any
+```
+
+Or via GUI: Windows Defender Firewall → Advanced Settings → Inbound Rules →
+New Rule → Port → TCP 11434 → Allow → All profiles → Name: "Ollama API".
+
+#### Step 3 — Pull the model (Windows)
+
+```powershell
+ollama pull llama3
+```
+
+#### Step 4 — Verify from grid-node-01
+
+After applying the above, test from grid-node-01:
+
+```bash
+# From the host
+python3 -c "
+import urllib.request
+r = urllib.request.urlopen('http://100.90.14.127:11434/api/tags', timeout=5)
+print(r.read().decode())
+"
+
+# From inside the container
+docker exec hersonbot-api python3 -c "
+import urllib.request
+r = urllib.request.urlopen('http://100.90.14.127:11434/api/tags', timeout=5)
+print(r.read().decode())
+"
+```
+
+Expected: JSON listing available models (e.g. `{"models":[{"name":"llama3",...}]}`).
+
+### Enable Ollama in HersonBot (after Windows is confirmed reachable)
+
+1. Add to `/opt/grid/stacks/hersonbot/.env`:
+
    ```
-
-2. Add to `/opt/grid/stacks/hersonbot/.env`:
-
-   ```
-   OLLAMA_HOST=http://host.docker.internal:11434
+   OLLAMA_HOST=http://100.90.14.127:11434
    OLLAMA_MODEL=llama3
-   OLLAMA_TIMEOUT_SECONDS=30
+   OLLAMA_TIMEOUT_SECONDS=60
    OLLAMA_CONTEXT_TOP_K=5
    ```
 
-3. Add `extra_hosts` to the `hersonbot-api` service in
-   `/opt/grid/stacks/hersonbot/docker-compose.yml`:
+   Note: Use the Tailscale IP (`100.90.14.127`), not the LAN IP (`192.168.0.100`).
+   LAN IP is DHCP-assigned and may change; Tailscale IP is stable.
+   `host.docker.internal` is **not** needed here — the container reaches the
+   Tailscale IP directly via the host network routing without `extra_hosts`.
 
-   ```yaml
-   extra_hosts:
-     - "host.docker.internal:host-gateway"
-   ```
+2. No `extra_hosts` required (Tailscale IP is routable from the container via
+   the host's `tailscale0` interface and Docker's default gateway).
 
-4. Rebuild and restart:
+3. Restart the API container to pick up the new env:
 
    ```bash
-   cd /opt/grid/stacks/hersonbot && docker compose up --build hersonbot-api -d
+   cd /opt/grid/stacks/hersonbot && docker compose up -d
+   ```
+
+   No rebuild needed — only the `.env` changed.
+
+4. Verify:
+
+   ```bash
+   curl -s -X POST http://127.0.0.1:8100/answer \
+     -H "Content-Type: application/json" \
+     -d '{"query": "what is HersonBot RAG Sandbox"}' \
+     | python3 -m json.tool
    ```
 
 ### Answer Query
