@@ -31,10 +31,10 @@ operator / scripts
 The API reads source documents from the repo `docs/` directory mounted read-only
 inside the container as `/docs`.
 
-### Planned: Windows Ollama integration
+### Windows Ollama integration
 
-LLM generation for `/answer` is designed to run on a separate Windows PC rather
-than on grid-node-01. The hardware split is intentional:
+LLM generation for `/answer` runs on a separate Windows PC rather than
+on grid-node-01. The hardware split is intentional:
 
 | Host | Role | Hardware |
 | --- | --- | --- |
@@ -50,6 +50,19 @@ than on grid-node-01. The hardware split is intentional:
 
 **Recommended connection path:** Tailscale (`100.90.14.127:11434`).
 LAN IP is DHCP and may change; Tailscale IP is stable.
+
+**Models available on Dustins-PC** (models stored in `D:\ollama\`):
+
+| Model | Size | Notes |
+| --- | --- | --- |
+| `llama3:latest` | 4.7 GB | Active default — general-purpose |
+| `mistral:latest` | 4.4 GB | Strong instruction following, faster than llama3 |
+| `qwen2.5:latest` | 4.7 GB | Multilingual, strong reasoning |
+| `qwen2.5-coder:14b` | 9.0 GB | Code-focused, largest model |
+| `phi3:latest` | 2.2 GB | Smallest/fastest, good for low-latency use |
+
+To switch models, update `OLLAMA_MODEL` in `/opt/grid/stacks/hersonbot/.env`
+and run `docker compose up -d` (no rebuild needed).
 
 **Current status (Phase 2E — confirmed 2026-05-16):** Fully operational.
 `/answer` returns grounded LLM responses via `llama3` on the RTX 5070.
