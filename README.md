@@ -1,65 +1,82 @@
-# HersonBot — Local RAG Sandbox
+# HersonBot RAG Sandbox
 
-A self-contained, local-first RAG (Retrieval-Augmented Generation) system for the Grid homelab. Ingest documents, query them semantically — no cloud APIs required.
+Local-first Retrieval-Augmented Generation (RAG) sandbox for the Grid homelab.
+It ingests plain-text documents, stores local embeddings in Qdrant, and returns
+the most relevant chunks through a FastAPI API. No cloud API is required for the
+current retrieval flow.
 
-> **Operators:** see [RUNBOOK.md](RUNBOOK.md) for the full operational guide — architecture, backup/restore, debug commands, safety boundaries, and known limitations.
+Operators should use [RUNBOOK.md](RUNBOOK.md) for the full operational guide:
+architecture, startup, smoke tests, backup/restore, safety boundaries, and
+known limitations.
+
+## What Is In This Repo
+
+| Path | Purpose |
+| --- | --- |
+| `api/` | FastAPI application, ingestion, retrieval, embedding config |
+| `docs/` | Sample ingestible `.txt` documents |
+| `scripts/` | Operator scripts for smoke testing and Qdrant backup/restore |
+| `.env.example` | Runtime configuration template |
+| `RUNBOOK.md` | Production-style operations guide |
+
+The Docker Compose stack is expected at `/opt/grid/stacks/hersonbot/` on the
+target homelab host. This repo contains the application source and operator
+scripts, not the stack definition.
 
 ## Stack
 
 | Component | Role |
-|-----------|------|
-| Qdrant | Vector database |
-| FastAPI | Ingestion + retrieval API |
-| sentence-transformers (all-MiniLM-L6-v2) | Local embeddings |
-| Docker Compose | All service orchestration |
+| --- | --- |
+| FastAPI | Ingestion and retrieval API |
+| Qdrant | Persistent vector database |
+| `sentence-transformers` | Local embeddings with `all-MiniLM-L6-v2` |
+| Docker Compose | Service orchestration on the homelab host |
 
-All services bind to `127.0.0.1` only. Nothing is exposed to the network.
-
----
+All documented service ports are bound to `127.0.0.1` on the host. Do not expose
+the API or Qdrant directly to the network without a separate security review.
 
 ## Quickstart
 
+On the Grid host:
+
 ```bash
-# 1. Copy env template (first time only)
+# 1. Copy env template on first setup
 cp /opt/grid/repos/hersonbot/.env.example /opt/grid/stacks/hersonbot/.env
 
-# 2. Start everything
+# 2. Start the stack
 cd /opt/grid/stacks/hersonbot
 docker compose up -d
 
 # 3. Check health
 curl http://127.0.0.1:8100/health
-# → {"status":"ok"}
-
 curl http://127.0.0.1:6333/healthz
-# → {"title":"qdrant - version ..."}
 ```
 
----
+Expected API health response:
 
-## Ingest a document
+```json
+{"status":"ok"}
+```
 
-### From a file (must be in /opt/grid/repos/hersonbot/docs/)
+## Ingest A Document
+
+Files must be `.txt` files under `/opt/grid/repos/hersonbot/docs/`.
 
 ```bash
 curl -X POST http://127.0.0.1:8100/ingest/file \
   -H "Content-Type: application/json" \
   -d '{"path": "sample.txt"}'
-# → {"status":"ingested","file":"sample.txt","chunks":7}
 ```
 
-### From raw text
+Raw text can be ingested directly:
 
 ```bash
 curl -X POST http://127.0.0.1:8100/ingest/text \
   -H "Content-Type: application/json" \
   -d '{"doc_id": "my-note", "text": "HersonBot lives on grid-node-01."}'
-# → {"status":"ingested","doc_id":"my-note","chunks":1}
 ```
 
----
-
-## Query the knowledge base
+## Query
 
 ```bash
 curl -X POST http://127.0.0.1:8100/query \
@@ -67,58 +84,61 @@ curl -X POST http://127.0.0.1:8100/query \
   -d '{"query": "what is HersonBot", "top_k": 3}'
 ```
 
-Returns top-k chunks ranked by cosine similarity with their source doc and score.
+The response includes the original query plus ranked chunks with source document
+metadata and similarity scores.
 
----
+Interactive API docs are available while the API is running:
 
-## Interactive API docs
-
-```
+```text
 http://127.0.0.1:8100/docs
 ```
 
----
-
-## Lifecycle commands
+## Common Operations
 
 ```bash
 # Start
 cd /opt/grid/stacks/hersonbot && docker compose up -d
 
-# Stop (data preserved)
+# Stop, preserving data
 cd /opt/grid/stacks/hersonbot && docker compose down
 
-# Full reset (wipes vector data)
-cd /opt/grid/stacks/hersonbot && docker compose down -v
-
-# View logs
-docker compose -f /opt/grid/stacks/hersonbot/docker-compose.yml logs -f
-
-# Rebuild API after code changes
+# Rebuild API after source changes
 cd /opt/grid/stacks/hersonbot && docker compose up --build hersonbot-api -d
+
+# Run end-to-end smoke test
+/opt/grid/repos/hersonbot/scripts/smoke-test.sh
 ```
 
----
+See [RUNBOOK.md](RUNBOOK.md) before running destructive commands such as
+`docker compose down -v` or restore operations.
 
-## Adding documents
+## Validation Commands
 
-Drop any `.txt` file into `/opt/grid/repos/hersonbot/docs/` and call `/ingest/file` with the filename. More formats (PDF, Markdown, HTML) are planned for a future phase.
+These checks are safe for repo hygiene changes:
 
----
+```bash
+# Bash: syntax-check tracked Python files without importing external services
+python -m py_compile api/*.py
 
-## Ports
+# Inspect docs and metadata changes
+git diff -- README.md RUNBOOK.md .gitignore AGENTS.md .github/
+```
 
-| Service | Port |
-|---------|------|
-| HersonBot API | 127.0.0.1:8100 |
-| Qdrant HTTP | 127.0.0.1:6333 |
-| Qdrant gRPC | 127.0.0.1:6334 |
+PowerShell equivalent:
 
----
+```powershell
+python -m py_compile (Get-ChildItem api -Filter *.py).FullName
+```
+
+Full runtime validation requires the homelab Docker stack:
+
+```bash
+/opt/grid/repos/hersonbot/scripts/smoke-test.sh
+```
 
 ## Roadmap
 
-- [ ] Phase 2: LLM generation (Ollama / OpenAI-compatible)
-- [ ] Phase 3: Discord bot integration
-- [ ] Phase 4: Web dashboard
-- [ ] Phase 5: Agent memory + multi-model orchestration
+- Phase 2: LLM generation with Ollama or an OpenAI-compatible API
+- Phase 3: Discord bot integration
+- Phase 4: Web dashboard
+- Phase 5: Agent memory and multi-model orchestration

@@ -1,4 +1,4 @@
-# Environment — never commit secrets
+# Environment: never commit secrets
 .env
 .env.*
 !.env.example
@@ -10,17 +10,22 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 *.egg-info/
 dist/
 build/
 .venv/
 venv/
+env/
 
 # Backups and runtime data
 backups/
 data/
 *.tar.gz
 *.tar.bz2
+*.zip
 
 # Qdrant storage artifacts
 qdrant/
@@ -31,15 +36,16 @@ storage/
 .cache/
 model_cache/
 sentence_transformers/
-# HuggingFace cache directories that may appear locally
-~/.cache/
+huggingface/
 
-# Claude Code internal config (operator-local only)
+# Agent/operator-local config
 .claude/
+.codex/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Editor
 .idea/
