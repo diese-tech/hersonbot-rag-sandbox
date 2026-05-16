@@ -1,0 +1,33 @@
+name: Repo hygiene
+description: Track docs, metadata, templates, or validation improvements.
+title: "Hygiene: "
+labels: ["repo-hygiene"]
+body:
+  - type: textarea
+    id: target
+    attributes:
+      label: Target area
+      description: README, RUNBOOK, .gitignore, AGENTS.md, templates, CI, or validation commands.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Requested change
+      description: Keep this limited to docs or metadata unless runtime changes are explicitly intended.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      placeholder: Example: python -m py_compile api/*.py; git diff --check
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Boundaries
+      options:
+        - label: No API behavior change is required.
+        - label: No Docker port, Qdrant logic, or operational script behavior change is required.
