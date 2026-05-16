@@ -226,6 +226,39 @@ else
   PASS=$((PASS + 1))
 fi
 
+# ── 10. /answer endpoint (Phase 2C) ──────────────────────────────────────────
+
+header "10. Answer endpoint (Phase 2C)"
+
+# Always-run: without OLLAMA_HOST configured the endpoint must return 503
+ANSWER_UNCONFIGURED=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" -X POST "${API}/answer" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "what is HersonBot RAG Sandbox"}' \
+  2>/dev/null || echo "000")
+
+if [ "$ANSWER_UNCONFIGURED" = "503" ]; then
+  green "/answer returns 503 when Ollama is unconfigured"
+  PASS=$((PASS + 1))
+elif [ "$ANSWER_UNCONFIGURED" = "200" ]; then
+  # OLLAMA_HOST is configured — run full Ollama checks instead
+  green "/answer is reachable (OLLAMA_HOST configured — running live checks)"
+  PASS=$((PASS + 1))
+
+  ANSWER_RESULT=$(curl -sf --max-time 60 -X POST "${API}/answer" \
+    -H "Content-Type: application/json" \
+    -d '{"query": "what is HersonBot RAG Sandbox"}' \
+    2>/dev/null || echo "UNREACHABLE")
+
+  check "/answer returns answer field"  "$ANSWER_RESULT" '"answer"'
+  check "/answer returns model field"   "$ANSWER_RESULT" '"model"'
+  check "/answer returns sources field" "$ANSWER_RESULT" '"sources"'
+  check "/answer returns retrieval_ms"  "$ANSWER_RESULT" "retrieval_ms"
+  check "/answer returns generation_ms" "$ANSWER_RESULT" "generation_ms"
+else
+  red "/answer returned unexpected HTTP ${ANSWER_UNCONFIGURED} (expected 503 or 200)"
+  FAIL=$((FAIL + 1))
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 header "Summary"

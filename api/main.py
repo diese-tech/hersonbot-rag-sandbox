@@ -5,8 +5,16 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 import config
+import generate as generate_lib
 import ingest as ingest_lib
 import retrieve as retrieve_lib
+from generate import (
+    OllamaInvalidResponse,
+    OllamaModelMissing,
+    OllamaTimeout,
+    OllamaUnconfigured,
+    OllamaUnreachable,
+)
 from qdrant_client import QdrantClient
 
 logging.basicConfig(level=config.LOG_LEVEL.upper())
@@ -39,6 +47,10 @@ class IngestFileRequest(BaseModel):
 class QueryRequest(BaseModel):
     query: str
     top_k: int = 5
+
+
+class AnswerRequest(BaseModel):
+    query: str
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -87,6 +99,28 @@ def query(req: QueryRequest):
         return {"query": req.query, "results": results}
     except Exception as e:
         logger.exception("query failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+_OLLAMA_HTTP: dict[type, tuple[int, str]] = {
+    OllamaUnconfigured: (503, "ollama_unconfigured"),
+    OllamaUnreachable: (502, "ollama_unreachable"),
+    OllamaTimeout: (504, "ollama_timeout"),
+    OllamaModelMissing: (502, "ollama_model_missing"),
+    OllamaInvalidResponse: (502, "ollama_invalid_response"),
+}
+
+
+@app.post("/answer")
+def answer(req: AnswerRequest):
+    try:
+        return generate_lib.generate_answer(query=req.query)
+    except (OllamaUnconfigured, OllamaUnreachable, OllamaTimeout,
+            OllamaModelMissing, OllamaInvalidResponse) as exc:
+        status_code, code = _OLLAMA_HTTP[type(exc)]
+        raise HTTPException(status_code=status_code, detail={"code": code, "detail": str(exc)})
+    except Exception as e:
+        logger.exception("answer failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

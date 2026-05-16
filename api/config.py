@@ -13,3 +13,8 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "info")
 DOCS_DIR = "/docs"
 CHUNK_SIZE = 500       # characters per chunk
 CHUNK_OVERLAP = 50     # overlap between chunks
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+OLLAMA_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "30"))
+OLLAMA_CONTEXT_TOP_K = int(os.getenv("OLLAMA_CONTEXT_TOP_K", "5"))

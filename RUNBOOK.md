@@ -2,7 +2,7 @@
 
 Environment: `grid-node-01`<br>
 Operator: `claudeops`<br>
-Phase: `2B`<br>
+Phase: `2C`<br>
 Last updated: 2026-05-16
 
 This runbook is the operator source of truth for running the HersonBot RAG Sandbox
@@ -187,6 +187,72 @@ curl -s -X POST http://127.0.0.1:8100/ingest/file \
 This is also the recommended pattern for fully removing a document from the
 knowledge base.
 
+## Answer Generation (Phase 2C)
+
+`POST /answer` retrieves context chunks and passes them to a local Ollama model to
+produce a grounded answer. The endpoint is disabled (returns 503) when `OLLAMA_HOST`
+is not set in the stack `.env`.
+
+### Enable Ollama
+
+1. Ensure Ollama is running on the Docker host with the desired model pulled:
+
+   ```bash
+   ollama pull llama3
+   ```
+
+2. Add to `/opt/grid/stacks/hersonbot/.env`:
+
+   ```
+   OLLAMA_HOST=http://host.docker.internal:11434
+   OLLAMA_MODEL=llama3
+   OLLAMA_TIMEOUT_SECONDS=30
+   OLLAMA_CONTEXT_TOP_K=5
+   ```
+
+3. Add `extra_hosts` to the `hersonbot-api` service in
+   `/opt/grid/stacks/hersonbot/docker-compose.yml`:
+
+   ```yaml
+   extra_hosts:
+     - "host.docker.internal:host-gateway"
+   ```
+
+4. Rebuild and restart:
+
+   ```bash
+   cd /opt/grid/stacks/hersonbot && docker compose up --build hersonbot-api -d
+   ```
+
+### Answer Query
+
+```bash
+curl -s -X POST http://127.0.0.1:8100/answer \
+  -H "Content-Type: application/json" \
+  -d '{"query": "what is HersonBot RAG Sandbox"}' \
+  | python3 -m json.tool
+```
+
+Response fields:
+
+| Field | Meaning |
+| --- | --- |
+| `answer` | LLM-generated answer grounded in retrieved context |
+| `model` | Ollama model name used |
+| `sources` | List of chunks with index, doc_id, chunk_index, score |
+| `retrieval_ms` | Time spent on vector retrieval |
+| `generation_ms` | Time spent on LLM generation |
+
+Error codes returned in `{"error": {"code": "...", "detail": "..."}}`:
+
+| HTTP | Code | Cause |
+| --- | --- | --- |
+| 503 | `ollama_unconfigured` | `OLLAMA_HOST` not set |
+| 502 | `ollama_unreachable` | Cannot connect to Ollama |
+| 504 | `ollama_timeout` | Ollama did not respond in time |
+| 502 | `ollama_model_missing` | Model not pulled on Ollama host |
+| 502 | `ollama_invalid_response` | Unexpected Ollama response |
+
 ## Query Commands
 
 ```bash
@@ -341,7 +407,7 @@ This system intentionally cannot:
 | Plain text only for `/ingest/file` | PDFs, Markdown, and HTML cannot be ingested directly | Add document loaders |
 | ~~Orphaned chunks on document shrink~~ | **Resolved in Phase 2B.** Use `DELETE /ingest/{doc_id}` before re-ingesting updated documents. | — |
 | Pre-2A duplicate data | Older random-UUID chunks may still exist if the collection was not reset after Phase 2A | One-time `docker compose down -v` and re-ingest |
-| No LLM generation | `/query` returns chunks, not synthesized answers | Add Ollama or OpenAI-compatible generation |
+| ~~No LLM generation~~ | **Resolved in Phase 2C.** `/answer` adds optional Ollama-backed generation. `/query` still returns raw chunks. | — |
 | No authentication | Any local process can call the API | Add token auth when access broadens |
 | Fixed chunk size | Prose works better than code or tables | Add per-document chunking strategy |
 | No ingest manifest | No easy list of ingested documents | Add manifest or collection inspection endpoint |
