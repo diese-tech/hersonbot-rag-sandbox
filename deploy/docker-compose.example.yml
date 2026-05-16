@@ -1,0 +1,105 @@
+# deploy/docker-compose.example.yml
+#
+# Version-controlled reference template for the HersonBot RAG Sandbox stack.
+# This file is NOT the live compose file. It exists for version control,
+# documentation, and disaster recovery reference.
+#
+# Live stack location: /opt/grid/stacks/hersonbot/docker-compose.yml
+#
+# To deploy from this template:
+#   cp deploy/docker-compose.example.yml /opt/grid/stacks/hersonbot/docker-compose.yml
+#   cp .env.example /opt/grid/stacks/hersonbot/.env
+#   # Edit .env with real values
+#   cd /opt/grid/stacks/hersonbot && docker compose up -d
+#
+# See RUNBOOK.md for full operational procedures.
+
+services:
+
+  # ── Qdrant vector database ────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.14.1
+    container_name: hersonbot-qdrant
+    restart: unless-stopped
+    ports:
+      # Bound to 127.0.0.1 only — never expose to 0.0.0.0
+      - "127.0.0.1:6333:6333"   # REST API
+      - "127.0.0.1:6334:6334"   # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - hersonbot_net
+    healthcheck:
+      # bash /dev/tcp used because the Qdrant image ships without curl or wget
+      test: ["CMD", "bash", "-c",
+        "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.0\\r\\nHost: 127.0.0.1\\r\\n\\r\\n' >&3 && grep -q 'passed' <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ── HersonBot RAG Sandbox API ─────────────────────────────────────────────────
+  hersonbot-api:
+    build:
+      # Path is relative to the stack directory (/opt/grid/stacks/hersonbot/).
+      # Adjust if the stack file is moved.
+      context: ../../repos/hersonbot/api
+      dockerfile: Dockerfile
+    container_name: hersonbot-api
+    restart: unless-stopped
+    ports:
+      # Bound to 127.0.0.1 only — never expose to 0.0.0.0
+      - "127.0.0.1:8100:8100"
+    env_file:
+      # Copy .env.example to /opt/grid/stacks/hersonbot/.env and fill in values.
+      # Never commit .env.
+      - .env
+    volumes:
+      # docs/ is mounted read-only; only .txt files are supported for /ingest/file
+      - ../../repos/hersonbot/docs:/docs:ro
+    networks:
+      - hersonbot_net
+    depends_on:
+      qdrant:
+        # API waits for Qdrant to pass its healthcheck before starting
+        condition: service_healthy
+    healthcheck:
+      # python3 stdlib used because python:3.12-slim ships without curl or wget
+      test: ["CMD", "python3", "-c",
+        "import urllib.request, sys; r = urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=5); sys.exit(0 if r.status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # ── Optional: Ollama answer generation (Phase 2C) ──────────────────────────
+    # Uncomment the blocks below to enable POST /answer backed by a local Ollama
+    # instance running on the Docker host. Also set OLLAMA_HOST in .env.
+    #
+    # extra_hosts:
+    #   # Routes host.docker.internal to the Docker host's gateway IP.
+    #   # Required when Ollama runs on the host, not in a container.
+    #   - "host.docker.internal:host-gateway"
+    #
+    # .env additions:
+    #   OLLAMA_HOST=http://host.docker.internal:11434
+    #   OLLAMA_MODEL=llama3
+    #   OLLAMA_TIMEOUT_SECONDS=30
+    #   OLLAMA_CONTEXT_TOP_K=5
+    #
+    # Pull the model on the host before starting:
+    #   ollama pull llama3
+
+# ── Persistent storage ────────────────────────────────────────────────────────
+volumes:
+  qdrant_storage:
+    # Named volume managed by Docker. Survives `docker compose down`.
+    # Only `docker compose down -v` removes it — back up first if data matters.
+    # Backup: /opt/grid/repos/hersonbot/scripts/backup-qdrant.sh
+
+# ── Network isolation ─────────────────────────────────────────────────────────
+networks:
+  hersonbot_net:
+    driver: bridge
+    # Isolated bridge — no connection to homelab services
+    # (Home Assistant, Uptime Kuma, Portainer run on separate networks)

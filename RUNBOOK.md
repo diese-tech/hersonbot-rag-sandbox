@@ -57,13 +57,51 @@ query text -> embedder.embed_one() -> Qdrant search -> top-k chunks and scores
 
 | Path | Purpose |
 | --- | --- |
-| `/opt/grid/repos/hersonbot/` | Source checkout |
+| `/opt/grid/repos/hersonbot/` | Source checkout (git-tracked) |
 | `/opt/grid/repos/hersonbot/api/` | FastAPI application |
 | `/opt/grid/repos/hersonbot/docs/` | Documents available for file ingest |
 | `/opt/grid/repos/hersonbot/scripts/` | Operational scripts |
-| `/opt/grid/stacks/hersonbot/` | Docker Compose stack directory |
-| `/opt/grid/stacks/hersonbot/.env` | Active runtime environment |
+| `/opt/grid/repos/hersonbot/deploy/docker-compose.example.yml` | **Version-controlled compose template** (see below) |
+| `/opt/grid/stacks/hersonbot/` | Docker Compose stack directory (not git-tracked) |
+| `/opt/grid/stacks/hersonbot/docker-compose.yml` | **Live compose file** — active runtime config |
+| `/opt/grid/stacks/hersonbot/.env` | Active runtime environment (never commit) |
 | `/opt/grid/backups/hersonbot/` | Qdrant backup archives |
+
+### Compose file: live vs. template
+
+The live compose file at `/opt/grid/stacks/hersonbot/docker-compose.yml` is the
+active runtime configuration. It is **not tracked in git** because the stack
+directory sits outside the repo and may contain environment-specific values.
+
+A version-controlled reference template is maintained at:
+
+```
+deploy/docker-compose.example.yml
+```
+
+This template mirrors the live file structure and is kept in sync manually when
+the stack configuration changes. Its purpose is:
+
+- **Disaster recovery**: reconstruct the stack from scratch if the stack
+  directory is lost.
+- **Version control audit trail**: track structural changes to the compose
+  config (healthchecks, service graph, port bindings) alongside the code that
+  depends on them.
+- **Onboarding reference**: new operators can read the template to understand
+  the full stack without access to the live host.
+
+To deploy from the template:
+
+```bash
+cp /opt/grid/repos/hersonbot/deploy/docker-compose.example.yml \
+   /opt/grid/stacks/hersonbot/docker-compose.yml
+cp /opt/grid/repos/hersonbot/.env.example \
+   /opt/grid/stacks/hersonbot/.env
+# Edit .env with real values, then:
+cd /opt/grid/stacks/hersonbot && docker compose up -d
+```
+
+**Keep these two files in sync** whenever the live compose config changes.
 
 ## Service Ports
 
