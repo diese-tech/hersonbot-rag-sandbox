@@ -2,7 +2,7 @@
 
 Environment: `grid-node-01`<br>
 Operator: `claudeops`<br>
-Phase: `2C`<br>
+Phase: `2D`<br>
 Last updated: 2026-05-16
 
 This runbook is the operator source of truth for running the HersonBot RAG Sandbox
@@ -111,6 +111,74 @@ docker compose -f /opt/grid/stacks/hersonbot/docker-compose.yml ps
 
 The Qdrant image is pinned upstream and does not need rebuilding for API source
 changes.
+
+## Docker Healthchecks (Phase 2D)
+
+Both services have Docker Compose healthchecks. Docker probes them on a schedule
+and marks each container `healthy`, `unhealthy`, or `starting`.
+
+| Service | Command | Interval | Timeout | Retries | Start period |
+| --- | --- | --- | --- | --- | --- |
+| `hersonbot-qdrant` | `bash /dev/tcp` → `/healthz` | 30 s | 5 s | 3 | 20 s |
+| `hersonbot-api` | `python3 urllib` → `/health` | 30 s | 10 s | 3 | 30 s |
+
+`bash /dev/tcp` is used for Qdrant because the upstream image has no `curl` or
+`wget`. `python3` stdlib is used for the API for the same reason.
+
+The `hersonbot-api` `depends_on` is upgraded to `condition: service_healthy`,
+so Compose will not start the API until Qdrant reports healthy.
+
+### Check healthcheck status
+
+```bash
+docker inspect --format '{{.State.Health.Status}}' hersonbot-api
+docker inspect --format '{{.State.Health.Status}}' hersonbot-qdrant
+
+# Or in one line via compose ps
+docker compose -f /opt/grid/stacks/hersonbot/docker-compose.yml ps
+```
+
+Expected output: `healthy` for both.
+
+### View healthcheck history (last 5 results)
+
+```bash
+docker inspect --format '{{json .State.Health}}' hersonbot-api | python3 -m json.tool
+docker inspect --format '{{json .State.Health}}' hersonbot-qdrant | python3 -m json.tool
+```
+
+### Troubleshoot an unhealthy container
+
+1. Check recent healthcheck output:
+
+   ```bash
+   docker inspect --format '{{range .State.Health.Log}}{{.ExitCode}} {{.Output}}{{end}}' hersonbot-api
+   ```
+
+2. Run the healthcheck manually inside the container:
+
+   ```bash
+   # API
+   docker exec hersonbot-api python3 -c \
+     "import urllib.request, sys; r = urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=5); sys.exit(0 if r.status == 200 else 1)"
+
+   # Qdrant
+   docker exec hersonbot-qdrant bash -c \
+     "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n' >&3 && grep -q 'passed' <&3"
+   ```
+
+3. Check service logs:
+
+   ```bash
+   docker compose -f /opt/grid/stacks/hersonbot/docker-compose.yml logs --tail=50 hersonbot-api
+   docker compose -f /opt/grid/stacks/hersonbot/docker-compose.yml logs --tail=50 qdrant
+   ```
+
+4. Restart the affected service (preserves data):
+
+   ```bash
+   docker compose -f /opt/grid/stacks/hersonbot/docker-compose.yml restart hersonbot-api
+   ```
 
 ## Health Checks
 
@@ -413,4 +481,4 @@ This system intentionally cannot:
 | No ingest manifest | No easy list of ingested documents | Add manifest or collection inspection endpoint |
 | Embedding model fixed at build time | Model changes require image rebuild | Acceptable for current phase |
 | Volume-level backup only | No per-document restore | Acceptable for current phase |
-| No Compose healthcheck documented in repo | Docker cannot auto-restart on hung API from repo metadata alone | Add stack-level healthcheck when stack file is owned here |
+| ~~No Compose healthcheck documented in repo~~ | **Resolved in Phase 2D.** Both services have `healthcheck` blocks; `hersonbot-api` `depends_on` upgraded to `condition: service_healthy`. | — |

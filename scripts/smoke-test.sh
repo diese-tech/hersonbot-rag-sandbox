@@ -40,6 +40,12 @@ QDRANT_STATUS=$(docker inspect --format '{{.State.Status}}' hersonbot-qdrant 2>/
 check "hersonbot-api container is running" "$API_STATUS" "running"
 check "hersonbot-qdrant container is running" "$QDRANT_STATUS" "running"
 
+API_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' hersonbot-api 2>/dev/null || echo "no-healthcheck")
+QDRANT_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' hersonbot-qdrant 2>/dev/null || echo "no-healthcheck")
+
+check "hersonbot-api Docker health is healthy" "$API_HEALTH" "healthy"
+check "hersonbot-qdrant Docker health is healthy" "$QDRANT_HEALTH" "healthy"
+
 # ── 2. Existing homelab containers untouched ──────────────────────────────────
 
 header "2. Homelab containers untouched"
