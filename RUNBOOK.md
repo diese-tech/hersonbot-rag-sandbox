@@ -2,7 +2,7 @@
 
 Environment: `grid-node-01`<br>
 Operator: `claudeops`<br>
-Phase: `2D`<br>
+Phase: `2E`<br>
 Last updated: 2026-05-16
 
 This runbook is the operator source of truth for running the HersonBot RAG Sandbox
@@ -51,8 +51,9 @@ than on grid-node-01. The hardware split is intentional:
 **Recommended connection path:** Tailscale (`100.90.14.127:11434`).
 LAN IP is DHCP and may change; Tailscale IP is stable.
 
-**Current status:** Port 11434 unreachable — Ollama is not yet configured to
-accept external connections. See "Enabling Windows Ollama" below.
+**Current status (Phase 2E — confirmed 2026-05-16):** Fully operational.
+`/answer` returns grounded LLM responses via `llama3` on the RTX 5070.
+Typical latency: ~1.3 s retrieval, ~31 s generation (first token on cold model).
 
 ## Component Responsibilities
 
@@ -399,41 +400,51 @@ print(r.read().decode())
 
 Expected: JSON listing available models (e.g. `{"models":[{"name":"llama3",...}]}`).
 
-### Enable Ollama in HersonBot (after Windows is confirmed reachable)
+### Active configuration (Phase 2E)
 
-1. Add to `/opt/grid/stacks/hersonbot/.env`:
+Live `.env` values at `/opt/grid/stacks/hersonbot/.env`:
 
-   ```
-   OLLAMA_HOST=http://100.90.14.127:11434
-   OLLAMA_MODEL=llama3
-   OLLAMA_TIMEOUT_SECONDS=60
-   OLLAMA_CONTEXT_TOP_K=5
-   ```
+```
+OLLAMA_HOST=http://100.90.14.127:11434
+OLLAMA_MODEL=llama3
+OLLAMA_TIMEOUT_SECONDS=60
+OLLAMA_CONTEXT_TOP_K=5
+```
 
-   Note: Use the Tailscale IP (`100.90.14.127`), not the LAN IP (`192.168.0.100`).
-   LAN IP is DHCP-assigned and may change; Tailscale IP is stable.
-   `host.docker.internal` is **not** needed here — the container reaches the
-   Tailscale IP directly via the host network routing without `extra_hosts`.
+**Design notes:**
+- Tailscale IP (`100.90.14.127`) used — stable, survives LAN IP changes.
+- LAN IP (`192.168.0.100`) is DHCP-assigned; do not use it in config.
+- No `extra_hosts` required — the container reaches Tailscale IPs through the
+  Docker bridge → host kernel → `tailscale0` interface natively.
+- `host.docker.internal` is not needed; that pattern is only for reaching the
+  Docker host itself, not a remote Tailscale peer.
 
-2. No `extra_hosts` required (Tailscale IP is routable from the container via
-   the host's `tailscale0` interface and Docker's default gateway).
+### To reconfigure or restore
 
-3. Restart the API container to pick up the new env:
+If the `.env` is lost or Ollama moves to a new IP:
 
-   ```bash
-   cd /opt/grid/stacks/hersonbot && docker compose up -d
-   ```
+```bash
+# Edit env
+nano /opt/grid/stacks/hersonbot/.env
 
-   No rebuild needed — only the `.env` changed.
+# Restart API (no rebuild required)
+cd /opt/grid/stacks/hersonbot && docker compose up -d
 
-4. Verify:
+# Verify
+curl -s -X POST http://127.0.0.1:8100/answer \
+  -H "Content-Type: application/json" \
+  -d '{"query": "what is HersonBot RAG Sandbox"}' \
+  | python3 -m json.tool
+```
 
-   ```bash
-   curl -s -X POST http://127.0.0.1:8100/answer \
-     -H "Content-Type: application/json" \
-     -d '{"query": "what is HersonBot RAG Sandbox"}' \
-     | python3 -m json.tool
-   ```
+### To disable Ollama (revert to retrieval-only mode)
+
+```bash
+# Remove or comment OLLAMA_HOST in /opt/grid/stacks/hersonbot/.env
+# Then restart:
+cd /opt/grid/stacks/hersonbot && docker compose up -d
+# /answer will return 503 ollama_unconfigured; /query continues to work normally
+```
 
 ### Answer Query
 

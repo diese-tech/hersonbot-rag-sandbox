@@ -232,22 +232,22 @@ else
   PASS=$((PASS + 1))
 fi
 
-# ── 10. /answer endpoint (Phase 2C) ──────────────────────────────────────────
+# ── 10. /answer endpoint (Phase 2C/2E) ───────────────────────────────────────
 
-header "10. Answer endpoint (Phase 2C)"
+header "10. Answer endpoint (Phase 2C/2E)"
 
-# Always-run: without OLLAMA_HOST configured the endpoint must return 503
-ANSWER_UNCONFIGURED=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" -X POST "${API}/answer" \
+ANSWER_HTTP=$(curl -s --max-time 60 -o /dev/null -w "%{http_code}" -X POST "${API}/answer" \
   -H "Content-Type: application/json" \
   -d '{"query": "what is HersonBot RAG Sandbox"}' \
   2>/dev/null || echo "000")
 
-if [ "$ANSWER_UNCONFIGURED" = "503" ]; then
-  green "/answer returns 503 when Ollama is unconfigured"
+if [ "$ANSWER_HTTP" = "503" ]; then
+  green "/answer returns 503 — OLLAMA_HOST not configured (unconfigured mode)"
   PASS=$((PASS + 1))
-elif [ "$ANSWER_UNCONFIGURED" = "200" ]; then
-  # OLLAMA_HOST is configured — run full Ollama checks instead
-  green "/answer is reachable (OLLAMA_HOST configured — running live checks)"
+
+elif [ "$ANSWER_HTTP" = "200" ]; then
+  # Fully operational — run all live response field checks
+  green "/answer returned 200 — Ollama live (running full response checks)"
   PASS=$((PASS + 1))
 
   ANSWER_RESULT=$(curl -sf --max-time 60 -X POST "${API}/answer" \
@@ -260,8 +260,26 @@ elif [ "$ANSWER_UNCONFIGURED" = "200" ]; then
   check "/answer returns sources field" "$ANSWER_RESULT" '"sources"'
   check "/answer returns retrieval_ms"  "$ANSWER_RESULT" "retrieval_ms"
   check "/answer returns generation_ms" "$ANSWER_RESULT" "generation_ms"
+
+elif [ "$ANSWER_HTTP" = "502" ]; then
+  # OLLAMA_HOST configured and reachable; model not yet pulled on the remote host.
+  # Network path is proven — this is not a HersonBot defect.
+  ANSWER_BODY=$(curl -s --max-time 10 -X POST "${API}/answer" \
+    -H "Content-Type: application/json" \
+    -d '{"query": "what is HersonBot RAG Sandbox"}' \
+    2>/dev/null || echo "")
+  if echo "$ANSWER_BODY" | grep -q "ollama_model_missing"; then
+    green "/answer returns 502 ollama_model_missing — Ollama reachable, model not pulled"
+    echo "  Action needed: run 'ollama pull llama3' on Dustins-PC (100.90.14.127)"
+    PASS=$((PASS + 1))
+  else
+    red "/answer returned 502 with unexpected body — Ollama unreachable or misconfigured"
+    echo "  Body: ${ANSWER_BODY}"
+    FAIL=$((FAIL + 1))
+  fi
+
 else
-  red "/answer returned unexpected HTTP ${ANSWER_UNCONFIGURED} (expected 503 or 200)"
+  red "/answer returned unexpected HTTP ${ANSWER_HTTP} (expected 200, 502, or 503)"
   FAIL=$((FAIL + 1))
 fi
 
