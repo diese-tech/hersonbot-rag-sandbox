@@ -1,0 +1,9 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+qdrant-client==1.14.2
+sentence-transformers==4.1.0
+torch==2.7.0+cpu
+numpy==2.2.5
+pydantic==2.11.4
+python-multipart==0.0.20
+aiofiles==24.1.0

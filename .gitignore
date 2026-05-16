@@ -1,0 +1,48 @@
+# Environment — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Backups and runtime data
+backups/
+data/
+*.tar.gz
+*.tar.bz2
+
+# Qdrant storage artifacts
+qdrant/
+qdrant_storage/
+storage/
+
+# Model / embedding caches
+.cache/
+model_cache/
+sentence_transformers/
+# HuggingFace cache directories that may appear locally
+~/.cache/
+
+# Claude Code internal config (operator-local only)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
