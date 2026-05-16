@@ -55,18 +55,18 @@ LAN IP is DHCP and may change; Tailscale IP is stable.
 
 | Model | Size | Notes |
 | --- | --- | --- |
-| `llama3:latest` | 4.7 GB | Active default — general-purpose |
-| `mistral:latest` | 4.4 GB | Strong instruction following, faster than llama3 |
-| `qwen2.5:latest` | 4.7 GB | Multilingual, strong reasoning |
-| `qwen2.5-coder:14b` | 9.0 GB | Code-focused, largest model |
-| `phi3:latest` | 2.2 GB | Smallest/fastest, good for low-latency use |
+| `phi3:latest` | 2.2 GB | **Active default** — best for RAG: ~22 tok/s, grounded answers |
+| `llama3:latest` | 4.7 GB | General-purpose fallback, ~4 tok/s |
+| `mistral:latest` | 4.4 GB | Avoid for RAG — poor context adherence in testing |
+| `qwen2.5:latest` | 4.7 GB | Multilingual, strong reasoning, ~4.5 tok/s |
+| `qwen2.5-coder:14b` | 9.0 GB | Code-focused, ~1.3 tok/s — wrong tool for prose RAG |
 
 To switch models, update `OLLAMA_MODEL` in `/opt/grid/stacks/hersonbot/.env`
 and run `docker compose up -d` (no rebuild needed).
 
 **Current status (Phase 2E — confirmed 2026-05-16):** Fully operational.
-`/answer` returns grounded LLM responses via `llama3` on the RTX 5070.
-Typical latency: ~1.3 s retrieval, ~31 s generation (first token on cold model).
+`/answer` returns grounded LLM responses via `phi3:latest` on the RTX 5070.
+Typical latency: ~45 ms retrieval, ~17 s generation cold / ~2 s warm.
 
 ## Component Responsibilities
 
