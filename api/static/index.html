@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HersonBot RAG Sandbox</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --panel: #ffffff;
+      --border: #e5e5e3;
+      --text: #1c1c1b;
+      --muted: #6e6e6b;
+      --accent: #2d6a4f;
+      --accent-hover: #1f4d38;
+      --error: #b91c1c;
+      --code-bg: #f5f5f3;
+      --score: #2d6a4f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .health {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #a3a3a0;
+    }
+    .dot.ok { background: #22c55e; }
+    .dot.err { background: var(--error); }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 28px 24px 80px;
+    }
+    .query-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 88px;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 15px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      resize: vertical;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 9px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    button.secondary:hover:not(:disabled) { background: var(--code-bg); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .top-k {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+    .top-k input {
+      width: 56px;
+      padding: 5px 8px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .results { display: flex; flex-direction: column; gap: 16px; }
+    .answer-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .answer-text {
+      font-size: 15px;
+      white-space: pre-wrap;
+      margin: 0 0 12px;
+    }
+    .answer-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .answer-meta span strong { color: var(--text); font-weight: 500; }
+    .chunk {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 14px;
+    }
+    .chunk-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .score {
+      background: var(--code-bg);
+      color: var(--score);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .doc-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .chunk-text {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      color: var(--text);
+      background: var(--code-bg);
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 4px 0 -4px 4px;
+    }
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: var(--error);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+    .empty {
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>HersonBot RAG Sandbox</h1>
+    <div class="health">
+      <span class="dot" id="dot"></span>
+      <span id="health-text">checking…</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="query-card">
+      <textarea id="q" placeholder="Ask a question or search the knowledge base…"></textarea>
+      <div class="controls">
+        <button id="ask-btn">Ask (LLM)</button>
+        <button id="search-btn" class="secondary">Search (chunks)</button>
+        <label class="top-k">
+          top_k
+          <input type="number" id="top-k" min="1" max="20" value="5">
+        </label>
+      </div>
+    </div>
+
+    <div id="results" class="results">
+      <div class="empty">Results will appear here. Press <kbd>Ctrl+Enter</kbd> to submit.</div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const results = $("results");
+
+    async function checkHealth() {
+      try {
+        const r = await fetch("/health");
+        const j = await r.json();
+        if (j.status === "ok") {
+          $("dot").className = "dot ok";
+          $("health-text").textContent = "API healthy";
+        } else {
+          $("dot").className = "dot err";
+          $("health-text").textContent = "unexpected status";
+        }
+      } catch (e) {
+        $("dot").className = "dot err";
+        $("health-text").textContent = "unreachable";
+      }
+    }
+
+    function setLoading(label) {
+      results.innerHTML = `<div class="empty"><span class="spinner"></span>${label}</div>`;
+    }
+
+    function showError(msg) {
+      results.innerHTML = `<div class="error">${msg}</div>`;
+    }
+
+    function escapeHTML(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function renderChunks(chunks, sectionLabel) {
+      if (!chunks || chunks.length === 0) {
+        return `<div class="empty">No results.</div>`;
+      }
+      const cards = chunks.map((c, i) => {
+        const score = typeof c.score === "number" ? c.score.toFixed(4) : "—";
+        const docId = escapeHTML(c.doc_id ?? "(unknown)");
+        const chunkIdx = c.chunk_index ?? 0;
+        const text = escapeHTML(c.text ?? "");
+        const idxLabel = sectionLabel === "Sources" ? `[${i + 1}] ` : "";
+        return `
+          <div class="chunk">
+            <div class="chunk-head">
+              <span class="score">${score}</span>
+              <span class="doc-id">${idxLabel}${docId}</span>
+              <span>chunk #${chunkIdx}</span>
+            </div>
+            ${text ? `<div class="chunk-text">${text}</div>` : ""}
+          </div>`;
+      }).join("");
+      return `<div class="section-label">${sectionLabel}</div>${cards}`;
+    }
+
+    async function doSearch() {
+      const q = $("q").value.trim();
+      if (!q) { showError("Enter a query first."); return; }
+      const top_k = parseInt($("top-k").value, 10) || 5;
+      setLoading("Searching…");
+      try {
+        const r = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q, top_k })
+        });
+        if (!r.ok) {
+          showError(`HTTP ${r.status}: ${await r.text()}`);
+          return;
+        }
+        const j = await r.json();
+        results.innerHTML = renderChunks(j.results, "Top matches");
+      } catch (e) {
+        showError(`Request failed: ${e.message}`);
+      }
+    }
+
+    async function doAsk() {
+      const q = $("q").value.trim();
+      if (!q) { showError("Enter a question first."); return; }
+      setLoading("Asking the model…");
+      try {
+        const r = await fetch("/answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q })
+        });
+        if (!r.ok) {
+          let detail = await r.text();
+          try {
+            const j = JSON.parse(detail);
+            if (j.detail && typeof j.detail === "object") {
+              detail = `${j.detail.code}: ${j.detail.detail}`;
+            } else if (j.detail) {
+              detail = j.detail;
+            }
+          } catch (_) {}
+          showError(`HTTP ${r.status}: ${escapeHTML(detail)}`);
+          return;
+        }
+        const j = await r.json();
+        const answer = escapeHTML(j.answer ?? "");
+        const model = escapeHTML(j.model ?? "—");
+        const ret = j.retrieval_ms ?? "—";
+        const gen = j.generation_ms ?? "—";
+        const meta = `
+          <div class="answer-meta">
+            <span><strong>model</strong> ${model}</span>
+            <span><strong>retrieval</strong> ${ret} ms</span>
+            <span><strong>generation</strong> ${gen} ms</span>
+          </div>`;
+        const answerCard = `
+          <div class="answer-card">
+            <p class="answer-text">${answer}</p>
+            ${meta}
+          </div>`;
+        const sourcesHTML = renderChunks(j.sources, "Sources");
+        results.innerHTML = answerCard + sourcesHTML;
+      } catch (e) {
+        showError(`Request failed: ${e.message}`);
+      }
+    }
+
+    $("ask-btn").addEventListener("click", doAsk);
+    $("search-btn").addEventListener("click", doSearch);
+    $("q").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        doAsk();
+      }
+    });
+
+    checkHealth();
+    setInterval(checkHealth, 15000);
+  </script>
+</body>
+</html>

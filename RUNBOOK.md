@@ -520,6 +520,44 @@ Interactive API docs are available at:
 http://127.0.0.1:8100/docs
 ```
 
+## Web UI
+
+A minimal browser UI is served by the API itself at the root path:
+
+```text
+http://127.0.0.1:8100/
+```
+
+The UI is a single static page (`api/static/index.html`) baked into the API
+image at build time. It calls the existing `/query`, `/answer`, and `/health`
+endpoints — no additional ports, services, or auth. Features:
+
+- **Ask (LLM)** — hits `POST /answer`, shows the grounded answer plus `model`,
+  `retrieval_ms`, `generation_ms`, and the source chunks with scores.
+- **Search (chunks)** — hits `POST /query`, shows the top-k chunks with scores
+  and full text.
+- **Health indicator** — small dot in the header; polls `/health` every 15 s.
+- **Keyboard shortcut** — `Ctrl+Enter` (or `Cmd+Enter`) submits an Ask.
+
+### Access
+
+The UI is bound to `127.0.0.1:8100` like all HersonBot ports. To use it:
+
+| Where you are | How to reach the UI |
+| --- | --- |
+| On `grid-node-01` directly (X11 / VNC) | Open `http://127.0.0.1:8100/` in a local browser |
+| Another machine on the LAN/Tailscale | SSH tunnel: `ssh -L 8100:127.0.0.1:8100 claudeops@grid-node-01` then open `http://127.0.0.1:8100/` |
+| Public internet | Not supported — UI has no auth; do not expose |
+
+### Update workflow
+
+The UI is a single file — `api/static/index.html`. Editing it requires an API
+image rebuild because the file is `COPY`ed into the image:
+
+```bash
+cd /opt/grid/stacks/hersonbot && docker compose up --build hersonbot-api -d
+```
+
 ## Logs And Debug
 
 ```bash

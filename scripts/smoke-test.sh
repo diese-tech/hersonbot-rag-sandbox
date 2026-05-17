@@ -68,6 +68,9 @@ QDRANT_HEALTH=$(curl -sf --max-time 5 "${QDRANT}/healthz" 2>/dev/null || echo "U
 check "API /health returns ok" "$API_HEALTH" "ok"
 check "Qdrant /healthz passes" "$QDRANT_HEALTH" "passed"
 
+UI_INDEX=$(curl -sf --max-time 5 "${API}/" 2>/dev/null || echo "UNREACHABLE")
+check "Web UI is served at GET /" "$UI_INDEX" "HersonBot RAG Sandbox"
+
 # ── 4. Qdrant collection exists ───────────────────────────────────────────────
 
 header "4. Qdrant collection"
